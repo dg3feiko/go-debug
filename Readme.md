@@ -68,6 +68,9 @@ A timestamp and two deltas are displayed. The timestamp consists of hour, minute
  if you wanted to see what all database activity was you might use `DEBUG=models:*`,
  or if you're love being swamped with logs: `DEBUG=*`. You may also specify a list of names delimited by a comma, for example `DEBUG=mongo,redis:*`.
 
+ You can also exclude specific debuggers by prefixing them with a "-". For example, 
+ `DEBUG=*,-foo:*` would include all debuggers except those starting with "foo:".
+
  The name given _should_ be the package name, however you can use whatever you like.
 
 # License

@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	writer  io.Writer = os.Stderr
-	reg     *regexp.Regexp
-	m       sync.Mutex
-	enabled = false
+	writer      io.Writer = os.Stderr
+	regIncludes *regexp.Regexp
+	regExcludes *regexp.Regexp
+	m           sync.Mutex
+	enabled     = false
 )
 
 // Debugger function.
@@ -66,10 +67,12 @@ func Enable(pattern string) {
 	m.Lock()
 	defer m.Unlock()
 	pattern = regexp.QuoteMeta(pattern)
-	pattern = strings.Replace(pattern, "\\*", ".*?", -1)
-	pattern = strings.Replace(pattern, ",", "|", -1)
-	pattern = "^(" + pattern + ")$"
-	reg = regexp.MustCompile(pattern)
+
+	includes, excludes := splitPattern(pattern)
+
+	regIncludes = regexp.MustCompile(patternToRegex(includes))
+	regExcludes = regexp.MustCompile(patternToRegex(excludes))
+
 	enabled = true
 }
 
@@ -85,7 +88,11 @@ func Debug(name string) DebugFunction {
 			return
 		}
 
-		if !reg.MatchString(name) {
+		if regExcludes.MatchString(name) {
+			return
+		}
+
+		if !regIncludes.MatchString(name) {
 			return
 		}
 
@@ -125,4 +132,50 @@ func humanizeNano(n int64) string {
 	}
 
 	return strconv.Itoa(int(n)) + suffix
+}
+
+// filterSlice is a standard array filter implementation
+func filterSlice(strings []string, fn func(string) bool) []string {
+	var result []string
+	for _, val := range strings {
+		if fn(val) {
+			result = append(result, val)
+		}
+	}
+	return result
+}
+
+// mapSlice is a standard array map implementation
+func mapSlice(strings []string, fn func(string) string) []string {
+	result := make([]string, len(strings))
+	for i, val := range strings {
+		result[i] = fn(val)
+	}
+	return result
+}
+
+// splitPattern takes in a debug pattern and splits the comma-list into
+// inclusions and exclusions, depending on whether the token begins with a dash
+func splitPattern(pattern string) (string, string) {
+	tokens := strings.Split(pattern, ",")
+
+	includes := filterSlice(tokens, func(str string) bool {
+		return !strings.HasPrefix(str, "-")
+	})
+
+	excludes := filterSlice(tokens, func(str string) bool {
+		return strings.HasPrefix(str, "-")
+	})
+	excludes = mapSlice(excludes, func(str string) string {
+		return str[1:]
+	})
+
+	return strings.Join(includes, ","), strings.Join(excludes, ",")
+}
+
+// patternToRegex takes a debug string pattern and formats it as a regex string
+func patternToRegex(pattern string) string {
+	pattern = strings.Replace(pattern, "\\*", ".*?", -1)
+	pattern = strings.Replace(pattern, ",", "|", -1)
+	return "^(" + pattern + ")$"
 }
